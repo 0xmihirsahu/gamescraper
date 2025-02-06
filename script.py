@@ -11,11 +11,43 @@ async def try_goto_with_retry(page, url, max_retries=3):
         except PlaywrightError as e:
             if "ERR_NETWORK_CHANGED" in str(e):
                 print(f"Network changed during attempt {attempt + 1}. Retrying...")
-                await asyncio.sleep(5)  # Wait 5 seconds before retry
+                await asyncio.sleep(5)
             else:
                 print(f"Unexpected error: {e}")
                 raise
     return False
+
+async def scrape_game_details(page, game_url):
+    print(f"\nVisiting game page: {game_url}")
+    if not await try_goto_with_retry(page, game_url):
+        return None
+
+    try:
+        # Wait for the content to load
+        await page.wait_for_selector("div.container div.GameViewLayout div.DataLayout", timeout=50000)
+        
+        # Get the innerHTML of the left info section
+        left_info = await page.locator("div.__Left div.InfoGameLayout ").inner_html()
+        
+        # Get the innerHTML of the right links section
+        right_links = await page.locator("div.__Right div.GameLinkItems ").inner_html()
+        
+        # Save both sections to separate files
+        with open("game_info.html", "w", encoding="utf-8") as f:
+            f.write("=== Game Info ===\n")
+            f.write(left_info)
+            f.write("\n\n=== Game Links ===\n")
+            f.write(right_links)
+            
+        print("Game details saved to game_info.html")
+        return {
+            "info": left_info,
+            "links": right_links
+        }
+        
+    except Exception as e:
+        print(f"Error scraping game details: {e}")
+        return None
 
 async def scrape_playtoearn():
     async with async_playwright() as p:
@@ -44,23 +76,18 @@ async def scrape_playtoearn():
             for row in rows:
                 third_td = await row.query_selector("td:nth-child(3)")
                 if third_td:
-                    # Find all 'a' tags in the third td
                     anchors = await third_td.query_selector_all("a")
                     for anchor in anchors:
                         href = await anchor.get_attribute("href")
                         if href:
                             links.append(f"{href}")
             
-            # Print results
-            print(f"\nFound {len(links)} links:")
-            for link in links:
-                print(link)
-            
-            # Save links to file
-            with open("game_links.txt", "w", encoding="utf-8") as f:
-                f.write("\n".join(links))
-            
-            print(f"\nLinks have been saved to game_links.txt")
+            if links:
+                print(f"\nFound {len(links)} links")
+                print(f"Visiting first game link...")
+                game_details = await scrape_game_details(page, links[0])
+                if game_details:
+                    print("Successfully scraped game details")
             
         except Exception as e:
             print(f"An error occurred while scraping: {e}")
