@@ -9,6 +9,21 @@ The script will:
 
 The script generates a `table_content.html` file containing the extracted game information from the third column of the games table.
 
+## To run this project
+
+1. Install Playwright:
+
+```bash
+pip install playwright
+playwright install # Install browser dependencies
+```
+
+2. Run the script:
+
+```bash
+python script.py
+```
+
 ## Features
 
 - Headless browser automation using Playwright
