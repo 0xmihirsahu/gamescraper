@@ -35,6 +35,31 @@ async def scrape_game_details(page, game_url):
         
         slug = game_url.split("/")[-1]
 
+        # Initialize contracts list
+        contracts = []
+
+        # Get table content div HTML
+        table_element = await page.query_selector("div.TableLayout")
+        if table_element:
+            print(f"Found contract table for {slug}")
+            
+            # Extract contract information
+            rows = await table_element.query_selector_all("tbody tr")
+            for row in rows:
+                cells = await row.query_selector_all("td")
+                if len(cells) >= 3:  # Make sure we have at least 3 cells
+                    blockchain = await cells[1].inner_text()
+                    address = await cells[2].inner_text()
+                    contracts.append({
+                        "blockchain": blockchain.strip(),
+                        "address": address.strip()
+                    })
+            
+            # Save raw table HTML for reference
+            table_html = await table_element.inner_html()
+            with open(f"TableLayoutDiv{slug}.html", "w", encoding="utf-8") as f:
+                f.write(table_html)
+
         # Extract social links
         social_links = {}
         links = await page.query_selector_all("div.GameLinkItems a")
@@ -69,6 +94,22 @@ async def scrape_game_details(page, game_url):
             if onclick and "window.open(" in onclick:
                 play_link = onclick.split("'")[1]
 
+        # Extract gallery images/videos
+        gallery_slides = await page.query_selector_all("div.GameGallerySlider .swiper-slide img")
+        gallery_items = []
+        for slide in gallery_slides:
+            src = await slide.get_attribute("src")
+            if src:
+                gallery_items.append(src)
+
+        # Extract blockchains
+        blockchains = []
+        blockchain_elements = await page.query_selector_all("div.GameBlockListItems .__Item .__TextView b")
+        for element in blockchain_elements:
+            blockchain_name = await element.inner_text()
+            if blockchain_name:
+                blockchains.append(blockchain_name.strip())
+
         # Construct final data object
         game_data = {
             "title": game_title,
@@ -78,7 +119,10 @@ async def scrape_game_details(page, game_url):
             "nft_info": nft_info,
             "social_links": social_links,
             "play_link": play_link,
-            "updated_at": datetime.datetime.utcnow().isoformat()
+            "gallery": gallery_items,
+            "blockchains": blockchains,
+            "contracts": contracts,
+            "updated_at": datetime.datetime.now(datetime.UTC).isoformat()
         }
 
         # Save to file
@@ -128,7 +172,7 @@ async def scrape_playtoearn():
             
             if links:
                 print(f"\nFound {len(links)} game links")
-                for link in links[:5]:  # Scrape only first 5 games
+                for link in links[:8]:  # Scrape only first 5 games
                     await scrape_game_details(page, link)
             
         except Exception as e:
